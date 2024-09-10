@@ -22,7 +22,7 @@ class _SoilMoistureActionsScreenState extends State<SoilMoistureScreen> {
 
   Future<void> _setupMqttClient() async {
     await _mqttClientWrapper.prepareMqttClient();
-    _mqttClientWrapper.subscribeToTopic('ESP32/soilMoisture', (message, topic) {
+    _mqttClientWrapper.subscribeToTopic('ESP32/soil', (message, topic) {
       setState(() {
         _soilMoisture = message;
       });

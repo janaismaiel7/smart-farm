@@ -22,7 +22,7 @@ class _FlameSensorActionsScreenState extends State<FlameSensorActionsScreen> {
 
   Future<void> _setupMqttClient() async {
     await _mqttClientWrapper.prepareMqttClient();
-    _mqttClientWrapper.subscribeToTopic('ESP32/flameStatus', (message, topic) {
+    _mqttClientWrapper.subscribeToTopic('ESP32/status', (message, topic) {
       setState(() {
         _flameStatus = message;
       });
