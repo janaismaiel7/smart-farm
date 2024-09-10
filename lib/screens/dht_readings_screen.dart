@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'mqtt_service.dart'; // Ensure this path matches your file structure
+import 'mqtt_service.dart';
 
 class DhtReadingsScreen extends StatefulWidget {
   @override
@@ -7,29 +7,39 @@ class DhtReadingsScreen extends StatefulWidget {
 }
 
 class _DhtReadingsScreenState extends State<DhtReadingsScreen> {
-  final MqttService _mqttService = MqttService();
+  final MQTTClientWrapper _mqttClientWrapper = MQTTClientWrapper(
+    host: 'ce19dd80e2624e5cb12598cbcdd77a45.s1.eu.hivemq.cloud',
+    port: 8883,
+  );
+
   String _temperature = 'Loading...';
   String _humidity = 'Loading...';
 
   @override
   void initState() {
     super.initState();
-    _mqttService.connect((topic, message) {
-      if (topic == 'ESP32/temperature') {
-        setState(() {
-          _temperature = message;
-        });
-      } else if (topic == 'ESP32/humidity') {
-        setState(() {
-          _humidity = message;
-        });
-      }
+    _setupMqttClient();
+  }
+
+  Future<void> _setupMqttClient() async {
+    await _mqttClientWrapper.prepareMqttClient();
+
+    _mqttClientWrapper.subscribeToTopic('ESP32/temperature', (message, topic) {
+      setState(() {
+        _temperature = message;
+      });
+    });
+
+    _mqttClientWrapper.subscribeToTopic('ESP32/humidity', (message, topic) {
+      setState(() {
+        _humidity = message;
+      });
     });
   }
 
   @override
   void dispose() {
-    _mqttService.disconnect(); // Disconnect when the screen is disposed
+    _mqttClientWrapper.disconnectMQTT(); // Disconnect when the screen is disposed
     super.dispose();
   }
 
@@ -39,28 +49,50 @@ class _DhtReadingsScreenState extends State<DhtReadingsScreen> {
       appBar: AppBar(
         title: Text('DHT Readings'),
         centerTitle: true,
-        backgroundColor: Colors.green, // Changed AppBar color
+        backgroundColor: Colors.teal,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Card(
-              elevation: 5,
-              child: ListTile(
-                title: Text('Temperature'),
-                subtitle: Text(_temperature),
-                tileColor: Colors.orange[100], // Background color of the card
+            _buildReadingCard('Temperature', _temperature, Colors.orange),
+            SizedBox(height: 16),
+            _buildReadingCard('Humidity', _humidity, Colors.blue),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReadingCard(String title, String value, Color color) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: color.withOpacity(0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
               ),
             ),
-            SizedBox(height: 16),
-            Card(
-              elevation: 5,
-              child: ListTile(
-                title: Text('Humidity'),
-                subtitle: Text(_humidity),
-                tileColor: Colors.blue[100], // Background color of the card
+            SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: color,
               ),
             ),
           ],

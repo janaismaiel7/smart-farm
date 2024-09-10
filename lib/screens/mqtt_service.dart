@@ -1,63 +1,111 @@
+import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
-class MqttService {
+class MQTTClientWrapper {
   late MqttServerClient client;
+  Function(String, String)? onMessageReceived;
+  MqttCurrentConnectionState connectionState = MqttCurrentConnectionState.IDLE;
+  MqttSubscriptionState subscriptionState = MqttSubscriptionState.IDLE;
+  final String host;
+  final int port;
 
-  MqttService() {
-    client = MqttServerClient('844e7aeba1714307a9f7ff556dd377a0.s1.eu.hivemq.cloud', '');
-    client.port = 8883; // Standard port for MQTT over TLS/SSL
-    client.secure = true; // Enable SSL/TLS
-    client.logging(on: true);
-    client.keepAlivePeriod = 20;
-    client.onDisconnected = onDisconnected;
-    client.onConnected = onConnected;
-    client.onSubscribed = onSubscribed;
-    client.pongCallback = pong;
+  MQTTClientWrapper({
+    required this.host,
+    required this.port,
+  });
 
-    final connMessage = MqttConnectMessage()
-        .withClientIdentifier('flutter_client')
-        .startClean()
-        .withWillQos(MqttQos.atMostOnce)
-        .authenticateAs('finalproject', '123455678fP');
-    client.connectionMessage = connMessage;
+  Future<void> prepareMqttClient() async {
+    _setupMqttClient();
+    await _connectClient();
   }
 
-  Future<void> connect(Function(String topic, String message) onMessage) async {
+  Future<void> _connectClient() async {
     try {
-      await client.connect();
-      client.subscribe('ESP32/soil', MqttQos.atMostOnce);
-      client.subscribe('ESP32/temperature', MqttQos.atMostOnce);
-      client.subscribe('ESP32/humidity', MqttQos.atMostOnce);
-      client.subscribe('ESP32/actions', MqttQos.atMostOnce);
+      print('Client connecting....');
+      connectionState = MqttCurrentConnectionState.CONNECTING;
+      await client.connect('finalproject', '123455678fP');
+    } on Exception catch (e) {
+      print('Client exception - $e');
+      connectionState = MqttCurrentConnectionState.ERROR_WHEN_CONNECTING;
+      client.disconnect();
+    }
 
-      client.updates?.listen((List<MqttReceivedMessage<MqttMessage>> c) {
-        final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
-        final payload = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-        onMessage(c[0].topic, payload);
-      });
-    } catch (e) {
-      print('Connection failed: $e');
+    if (client.connectionStatus?.state == MqttConnectionState.connected) {
+      connectionState = MqttCurrentConnectionState.CONNECTED;
+      print('Client connected');
+    } else {
+      print(
+          'ERROR client connection failed - disconnecting, status is ${client.connectionStatus}');
+      connectionState = MqttCurrentConnectionState.ERROR_WHEN_CONNECTING;
+      client.disconnect();
     }
   }
 
-  void disconnect() {
-    client.disconnect();
+  void _setupMqttClient() {
+    client = MqttServerClient.withPort(host, 'clientId', port);
+    client.secure = true;
+    client.securityContext = SecurityContext.defaultContext;
+    client.keepAlivePeriod = 20;
+    client.onDisconnected = _onDisconnected;
+    client.onConnected = _onConnected;
+    client.onSubscribed = _onSubscribed;
   }
 
-  void onConnected() {
-    print('Connected');
+  void subscribeToTopic(String topicName, Function(String, String) onMessageReceived) {
+    print('Subscribing to the $topicName topic');
+    client.subscribe(topicName, MqttQos.atMostOnce);
+
+    client.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
+      for (var message in messages) {
+        final MqttPublishMessage recMess = message.payload as MqttPublishMessage;
+        final String receivedTopic = message.topic;
+        final String receivedMessage =
+        MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+
+        print('Received message: $receivedMessage from topic: $receivedTopic');
+
+        if (receivedTopic == topicName) {
+          onMessageReceived(receivedMessage, receivedTopic);
+        }
+      }
+    });
   }
 
-  void onDisconnected() {
-    print('Disconnected');
+
+  void _onSubscribed(String topic) {
+    print('Subscription confirmed for topic $topic');
+    subscriptionState = MqttSubscriptionState.SUBSCRIBED;
   }
 
-  void onSubscribed(String topic) {
-    print('Subscribed to $topic');
+  void _onDisconnected() {
+    print('OnDisconnected client callback - Client disconnection');
+    connectionState = MqttCurrentConnectionState.DISCONNECTED;
   }
 
-  void pong() {
-    print('Ping response received');
+  void _onConnected() {
+    connectionState = MqttCurrentConnectionState.CONNECTED;
+    print('OnConnected client callback - Client connection was successful');
   }
+
+  void disconnectMQTT() {
+    try {
+      client.disconnect();
+    } catch (e) {
+      print('Disconnection error: $e');
+    }
+  }
+}
+
+enum MqttCurrentConnectionState {
+  IDLE,
+  CONNECTING,
+  CONNECTED,
+  DISCONNECTED,
+  ERROR_WHEN_CONNECTING
+}
+
+enum MqttSubscriptionState {
+  IDLE,
+  SUBSCRIBED
 }

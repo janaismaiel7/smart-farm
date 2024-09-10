@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart Farm App',
       theme: ThemeData(
-        primarySwatch: Colors.green, // Changed primary color to green
+        primarySwatch: Colors.green,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: LoginScreen(),
@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/home': (context) => HomeScreen(),
         '/dht': (context) => DhtReadingsScreen(),
-        '/soil': (context) => SoilMoistureActionsScreen(),
+        '/soil': (context) => SoilMoistureScreen(),
         '/flame': (context) => FlameSensorActionsScreen(),
       },
     );
